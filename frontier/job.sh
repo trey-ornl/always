@@ -13,5 +13,10 @@ export MPICH_OFI_NIC_VERBOSE=1
 ulimit -c 0
 NODES=${SLURM_JOB_NUM_NODES}
 TASKS=$(( NODES * 8 ))
-SIZE=${1}
-srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --unbuffered ./all ${SIZE}
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --unbuffered ./all
+sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --unbuffered ./all 0 strided
+sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --unbuffered ./iall
+sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --unbuffered ./iall 0 strided

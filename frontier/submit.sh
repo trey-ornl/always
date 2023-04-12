@@ -1,15 +1,13 @@
 #!/bin/bash
-MAX=$1
+MAX=${1}
 N=1
+STAMP=$(date +%s)
 while [ ${N} -lt ${MAX} ]
 do
   ID=$(printf %04d ${N})
-  sbatch -o all.${ID}.out -N${N} job.sh
-  sbatch -o iall.${ID}.out -N${N} ijob.sh
+  sbatch -o all.${STAMP}-${ID}.out -N${N} job.sh
   N=$(( N * 2 ))
 done
-N=${MAX}
-ID=$(printf %04d ${N})
-sbatch -o all.${ID}.out -N${N} job.sh
-sbatch -o iall.${ID}.out -N${N} ijob.sh
+ID=$(printf %04d ${MAX})
+sbatch -o all.${STAMP}-${ID}.out -N${MAX} job.sh
 

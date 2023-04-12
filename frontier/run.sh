@@ -11,4 +11,5 @@ export MPICH_VERSION_DISPLAY=1
 NODES=${1}
 TASKS=$(( NODES * 8 ))
 SIZE=${2}
-srun -t 15:00 -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./all ${SIZE}
+STRIDED=${3}
+srun -t 15:00 -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./all ${SIZE} ${STRIDED}
