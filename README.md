@@ -1,8 +1,8 @@
 # Always
 These bencharks measure the performance of `MPI_Alltoall` and `MPI_Ialltoall` using a triply nested loop of calls.
 
-- outer: loop over sizes of concurrent subcommunicators, `i = `size of `MPI_COMM_WORLD .. 1`
-  - middle: loop over number of calls in inner loop, `j = 1 .. `number that exceeds time limit
+- outer: loop over sizes of concurrent subcommunicators, `i = <size of MPI_COMM_WORLD>..1`
+  - middle: loop over number of calls in inner loop, `j = 1..<number that exceeds time limit>`
     - inner: loop over `j` all-to-all calls, `k = 1..j`, each with total/`j` of the buffer
 
 The outer loop iterates over increasing numbers of smaller subcommunicators, starting with `MPI_COMM_WORLD` and ending at one communicator per task. The number of communicators doubles with each iteration. The benchmark runs all-to-alls across all subcommunicators simultaneously, so every task in `MPI_COMM_WORLD` is busy.

@@ -1,6 +1,5 @@
 #!/bin/bash
-module load rocm
-module load craype-accel-amd-gfx90a
+source ./env
 module -t list
 set -x
 rm -f all iall
