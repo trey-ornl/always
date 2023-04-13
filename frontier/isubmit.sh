@@ -5,9 +5,9 @@ STAMP=$(date +%s)
 while [ ${N} -lt ${MAX} ]
 do
   ID=$(printf %04d ${N})
-  sbatch -o all.${STAMP}-${ID}.out -N${N} job.sh
+  sbatch -o iall.${STAMP}-${ID}.out -N${N} ijob.sh
   N=$(( N * 2 ))
 done
 ID=$(printf %04d ${MAX})
-sbatch -o all.${STAMP}-${ID}.out -N${MAX} job.sh
+sbatch -o iall.${STAMP}-${ID}.out -N${MAX} ijob.sh
 
