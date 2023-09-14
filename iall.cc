@@ -91,7 +91,7 @@ int main(int argc, char **argv)
   CHECK(hipMemcpy(sendD,host,bytes,hipMemcpyHostToDevice));
 
   if (rank == 0) {
-    printf("# tasks steps count miB/task/step GiB/task seconds GiB/s/task\n");
+    printf("# tasks steps count MiB/task/step GiB/task seconds GiB/s/task\n");
     fflush(stdout);
   }
   for (int targetSize = worldSize; targetSize > 0; targetSize /= 2) {
