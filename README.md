@@ -7,7 +7,7 @@ These bencharks measure the performance of `MPI_Alltoall` and `MPI_Ialltoall` us
 
 The outer loop iterates over increasing numbers of smaller subcommunicators, starting with `MPI_COMM_WORLD` and ending at one communicator per task. The number of communicators doubles with each iteration. The benchmark runs all-to-alls across all subcommunicators simultaneously, so every task in `MPI_COMM_WORLD` is busy.
 
-The middle loop iterates over increasing numbers of calls with smaller message sizes, starting with one call with a large message and ending when the time for all calls of a given message size exceeds a maximum time limit (currently one second). The default total message size is 640x640x640 doubles. An optional first argument specifies a different size, in number of doubles. A non-positive value for this argument results in the default.
+The middle loop iterates over increasing numbers of calls with smaller message sizes, starting with one call with a large message and ending when the time for all calls of a given message size exceeds a maximum time limit (currently two seconds). The default total message size is 640x640x640 doubles. An optional first argument specifies a different size, in number of doubles. A non-positive value for this argument results in the default.
 
 The inner loop is over multiple calls with equal-sized fractions of the buffer. The first iteration of the middle loop does a single all-to-all with the full buffer size. The second middle-loop iteration does an inner loop over two all-to-alls, each with half the full size. The number of inner-loop calls increases while the size of the messages decreases by powers of two with each middle-loop iteration, until the time for all the calls in the inner loop exceeds the time limit.
 

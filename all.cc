@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -170,7 +171,7 @@ int main(int argc, char **argv)
         printf("\n");
         fflush(stdout);
       }
-      static constexpr double timeLimit = 1;
+      static constexpr double timeLimit = 2;
       if ((twoStep > 2) && (timeMax > timeLimit)) break;
     }
     MPI_Comm_free(&comm);
