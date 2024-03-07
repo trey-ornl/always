@@ -10,4 +10,4 @@ NODES=${1}
 shift
 TASKS=$(( NODES * 8 ))
 ldd ./all
-srun -t 4:00 -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./all $@
+srun -q debug -t 4:00 -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./all $@

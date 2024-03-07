@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 
   int strided = false;
   int countLo = 1;
-  int iters = 3;
+  int iters = 10;
   if (rank == 0) {
     if (argc > 1) strided = ('s' == tolower(*argv[1]));
     int i = 0;
@@ -82,11 +82,6 @@ int main(int argc, char **argv)
 
   const long countAll = long(worldSize)*long(countHi);
   const size_t bytes = countAll*sizeof(long);
-  if (rank == 0) {
-    printf("# %s Alltoall performance\n", strided ? "Strided" : "Contiguous");
-    printf("# %d tasks, counts %d..%d, max aggregate message size %g GB\n",worldSize,countLo,countHi,double(bytes)/double(1024*1024*1024));
-    fflush(stdout);
-  }
 
   long *host = nullptr;
   CHECK(hipHostMalloc(&host,bytes,hipHostMallocDefault));
@@ -106,13 +101,15 @@ int main(int argc, char **argv)
   assert(sendD);
   CHECK(hipMemcpy(sendD,host,bytes,hipMemcpyHostToDevice));
 
-  if (rank == 0) {
-    printf("# comm size | count (longs) | seconds (min, avg, max) | bi-dir GiB/s (min, avg, max)\n");
-    fflush(stdout);
-  }
   for (int targetSize = worldSize; targetSize > 0; targetSize /= 2) {
 
-    const int stride = worldSize/targetSize;
+    if (rank == 0) {
+      printf("\n\n# %s Alltoall performance, %d tasks, %d iterations\n", strided ? "Strided" : "Contiguous",worldSize,iters);
+      printf("# comms | comm size | count | GiB (in+out) | seconds (min, avg, max) | GiB/s (min, avg, max)\n");
+      fflush(stdout);
+    }
+
+    const int stride = (worldSize-1)/targetSize+1;
     const int team = strided ? rank%stride : rank/targetSize;
 
     MPI_Comm comm;
@@ -128,48 +125,61 @@ int main(int argc, char **argv)
       const double gib = 2.0*double(activeBytes)/double(1024*1024*1024);
       const long myOffset = long(count)*long(id);
 
+      double timeMin = 60.0*60.0*24.0*365.0;
+      double timeSum = 0;
+      double timeMax = 0;
+
       for (int i = 0; i <= iters; i++) {
 
         MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(comm);
         const double before = MPI_Wtime();
         MPI_Alltoall(sendD,count,MPI_LONG,recvD,count,MPI_LONG,comm);
         const double after = MPI_Wtime();
-
+        MPI_Barrier(comm);
+        MPI_Barrier(MPI_COMM_WORLD);
         CHECK(hipMemcpy(host,recvD,activeBytes,hipMemcpyDeviceToHost));
-        int fails = 0;
-#pragma omp parallel for collapse(2) reduction(+:fails)
+        bool failed = false;
+#pragma omp parallel for collapse(2)
         for (int task = 0; task < actualSize; task++) {
           for (int j = 0; j < count; j++) {
+            if (failed) continue;
             const long worldTask = strided ? team+task*stride : task+team*targetSize;
             const long offset = myOffset+worldTask*countAll;
             const long expected = j+offset;
             const long k = j+task*count;
             if (expected != host[k]) {
-              fprintf(stderr,"ERROR %d: %d %ld %ld %ld\n",rank,task,k,expected,host[k]);
+              failed = true;
+              fprintf(stderr,"ERROR: rank %d task %d element %ld expected %ld received %ld\n",rank,task,k,expected,host[k]);
               fflush(stderr);
-              fails++;
             }
           }
         }
-        MPI_Barrier(comm);
-        if (fails) MPI_Abort(MPI_COMM_WORLD,fails);
-
-        const double time = after-before;
-        double timeMin = 0;
-        double timeMax = 0;
-        double timeSum = 0;
-        MPI_Reduce(&time,&timeMin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
-        MPI_Reduce(&time,&timeSum,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
-        MPI_Reduce(&time,&timeMax,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
-
+        if (failed) {
+          fprintf(stderr,"FAILURE: rank %d aborting\n",rank);
+          fflush(stderr);
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (failed) MPI_Abort(MPI_COMM_WORLD,rank+1);
+        const double myTime = after-before;
+        double time = 0;
+        MPI_Reduce(&myTime,&time,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
         if (rank == 0) {
-          const double timeAvg = timeSum/double(worldSize);
-          if (i == 0) printf("\n\n# ");
-          printf("%d %d %g %g %g %g %g %g",targetSize,count,timeMin,timeAvg,timeMax,gib/timeMax,gib/timeAvg,gib/timeMin);
-          if (i == 0) printf(" # warm up");
-          printf("\n");
+          if (i == 0) {
+            printf("### 0 time %g (warmup, ignored)\n",time);
+          } else {
+            timeMin = std::min(timeMin,time);
+            timeSum += time;
+            timeMax = std::max(timeMax,time);
+            printf("### %d time %g\n",i,time);
+          }
           fflush(stdout);
         }
+      }
+      if (rank == 0) {
+        const double timeAvg = timeSum/double(iters);
+        printf("%d %d %d %g %g %g %g %g %g %g\n",stride,targetSize,count,gib,timeMin,timeAvg,timeMax,gib/timeMax,gib/timeAvg,gib/timeMin);
+        fflush(stdout);
       }
     }
     MPI_Comm_free(&comm);
