@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -t 25:00 --exclusive
+#SBATCH -J always -t 55:00 --exclusive
 source ./env
 module -t list
 set -x
