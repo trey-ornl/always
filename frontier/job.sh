@@ -10,6 +10,9 @@ ulimit -c 0
 NODES=${SLURM_JOB_NUM_NODES}
 TASKS=$(( NODES * 8 ))
 
+ldd ../../fishfry/fishfry
+
+
 ldd ./all
 
 date

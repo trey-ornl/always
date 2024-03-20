@@ -17,6 +17,34 @@ static void checkHip(const hipError_t err, const char *const file, const int lin
 
 #define CHECK(X) checkHip(X,__FILE__,__LINE__)
 
+__global__ void init(const int rank, const long countAll, long *const sendD)
+{
+  const long offset = countAll*long(rank);
+  const long stride = blockDim.x*gridDim.x;
+  const long ilo = threadIdx.x+blockIdx.x*blockDim.x;
+  for (long i = ilo; i < countAll; i += stride) sendD[i] = i+offset;
+}
+
+__global__ void verify(const bool strided, const long myOffset, const long countAll, const long commSize, const long count, const int team, const int taskStride, long *const recvD)
+{
+  const long iStride = blockDim.x*gridDim.x;
+  const long ilo = threadIdx.x+blockIdx.x*blockDim.x;
+  const long ihi = count*commSize;
+  for (long i = ilo; i < ihi; i += iStride) {
+    const long task = i/count;
+    const long j = i%count;
+    const long worldTask = strided ? long(team+task*taskStride) : long(task+team*taskStride);
+    const long offset = myOffset+worldTask*countAll;
+    const long expected = j+offset;
+    const long k = j+task*long(count);
+    if (expected != recvD[k]) {
+      printf("ERROR: task %ld element %ld expected %ld received %ld\n",task,k,expected,recvD[k]);
+      abort();
+    }
+    recvD[k] = 0;
+  }
+}
+
 int main(int argc, char **argv)
 {
   MPI_Init(&argc,&argv);
@@ -73,14 +101,6 @@ int main(int argc, char **argv)
   const long countAll = long(worldSize)*long(countHi);
   const size_t bytes = countAll*sizeof(long);
 
-  long *host = nullptr;
-  CHECK(hipHostMalloc(&host,bytes,hipHostMallocDefault));
-  assert(host);
-  
-  const long offset = countAll*long(rank);
-#pragma omp parallel for
-  for (long i = 0; i < countAll; i++) host[i] = i+offset;
-
   long *recvD = nullptr;
   CHECK(hipMalloc(&recvD,bytes));
   assert(recvD);
@@ -89,7 +109,12 @@ int main(int argc, char **argv)
   long *sendD = nullptr;
   CHECK(hipMalloc(&sendD,bytes));
   assert(sendD);
-  CHECK(hipMemcpy(sendD,host,bytes,hipMemcpyHostToDevice));
+
+  const int block = 256;
+  const int gridMax = 1024*1024;
+  const int grid = std::min(long(gridMax),(countAll-1)/long(block)+1);
+  init<<<grid,block>>>(rank,countAll,sendD);
+  CHECK(hipDeviceSynchronize());
 
   for (int targetSize = worldSize; targetSize > 0; targetSize /= 2) {
 
@@ -111,13 +136,16 @@ int main(int argc, char **argv)
 
     assert(actualSize <= targetSize);
     const long countMax = std::min<long>(INT_MAX,countAll/long(targetSize));
+    const long taskStride = strided ? stride : actualSize;
 
     for (int count = countMax; count >= countLo; count /= 2) {
 
-      const size_t activeBytes = size_t(count)*size_t(actualSize)*sizeof(long);
+      const long activeAll = long(count)*long(actualSize);
+      const size_t activeBytes = activeAll*sizeof(long);
       assert(activeBytes <= bytes);
       const double gib = 2.0*double(activeBytes)/double(1024*1024*1024);
       const long myOffset = long(count)*long(id);
+      const int grid = std::min(long(gridMax),(activeAll-1)/long(block)+1);
 
       double timeMin = 60.0*60.0*24.0*365.0;
       double timeSum = 0;
@@ -130,29 +158,7 @@ int main(int argc, char **argv)
         MPI_Alltoall(sendD,count,MPI_LONG,recvD,count,MPI_LONG,comm);
         const double after = MPI_Wtime();
         MPI_Barrier(MPI_COMM_WORLD);
-        CHECK(hipMemcpy(host,recvD,activeBytes,hipMemcpyDeviceToHost));
-        bool failed = false;
-#pragma omp parallel for collapse(2) shared(failed)
-        for (long task = 0; task < actualSize; task++) {
-          for (long j = 0; j < count; j++) {
-            if (failed) continue;
-            const long worldTask = strided ? long(team+task*stride) : long(task+team*targetSize);
-            const long offset = myOffset+worldTask*countAll;
-            const long expected = j+offset;
-            const long k = j+task*long(count);
-            if (expected != host[k]) {
-              failed = true;
-              fprintf(stderr,"ERROR: rank %d task %ld element %ld expected %ld received %ld\n",rank,task,k,expected,host[k]);
-              fflush(stderr);
-            }
-          }
-        }
-        if (failed) {
-          fprintf(stderr,"FAILURE: rank %d aborting\n",rank);
-          fflush(stderr);
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (failed) MPI_Abort(MPI_COMM_WORLD,rank+1);
+        verify<<<grid,block>>>(strided,myOffset,countAll,actualSize,count,team,taskStride,recvD);
         const double myTime = after-before;
         double time = 0;
         MPI_Reduce(&myTime,&time,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
@@ -167,6 +173,7 @@ int main(int argc, char **argv)
           }
           fflush(stdout);
         }
+        CHECK(hipDeviceSynchronize());
       }
       if (rank == 0) {
         const double timeAvg = timeSum/double(iters);
@@ -183,8 +190,6 @@ int main(int argc, char **argv)
   CHECK(hipFree(recvD));
   recvD = nullptr;
 
-  CHECK(hipHostFree(host));
-  host = nullptr;
   MPI_Finalize();
   return 0;
 }
