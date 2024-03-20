@@ -90,7 +90,6 @@ int main(int argc, char **argv)
   CHECK(hipMalloc(&sendD,bytes));
   assert(sendD);
   CHECK(hipMemcpy(sendD,host,bytes,hipMemcpyHostToDevice));
-  const int countHalfMax = INT_MAX/2;
 
   for (int targetSize = worldSize; targetSize > 0; targetSize /= 2) {
 
@@ -110,9 +109,13 @@ int main(int argc, char **argv)
     int id = MPI_PROC_NULL;
     MPI_Comm_rank(comm,&id);
 
-    for (int count = countHi; count >= countLo; count /= 2) {
+    assert(actualSize <= targetSize);
+    const long countMax = std::min<long>(INT_MAX,countAll/long(targetSize));
+
+    for (int count = countMax; count >= countLo; count /= 2) {
 
       const size_t activeBytes = size_t(count)*size_t(actualSize)*sizeof(long);
+      assert(activeBytes <= bytes);
       const double gib = 2.0*double(activeBytes)/double(1024*1024*1024);
       const long myOffset = long(count)*long(id);
 
@@ -172,7 +175,6 @@ int main(int argc, char **argv)
       }
     }
     MPI_Comm_free(&comm);
-    if (countHi <= countHalfMax) countHi += countHi;
   }
   if (rank == 0) { printf("# Done\n"); fflush(stdout); }
 
