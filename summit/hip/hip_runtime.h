@@ -2,6 +2,7 @@
 
 #include <cuda_runtime.h>
 
+#define hipDeviceSynchronize cudaDeviceSynchronize
 #define hipError_t cudaError_t
 #define hipFree cudaFree
 #define hipGetDevice cudaGetDevice
