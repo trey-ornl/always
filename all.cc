@@ -79,7 +79,7 @@ int main(int argc, char **argv)
 
   int strided = false;
   int countLo = 1;
-  int countHi = 40*1024;
+  int countHi = 32*1024;
   int iters = 3;
   if (rank == 0) {
     if (argc > 1) strided = ('s' == tolower(*argv[1]));
