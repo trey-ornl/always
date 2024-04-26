@@ -39,7 +39,7 @@ __global__ void verify(const bool strided, const long myOffset, const long count
     const long k = j+task*long(count);
     if (expected != recvD[k]) {
       printf("ERROR: task %ld element %ld expected %ld received %ld\n",task,k,expected,recvD[k]);
-      abort();
+      assert(false);
     }
     recvD[k] = 0;
   }
