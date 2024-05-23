@@ -50,6 +50,7 @@ int main(int argc, char **argv)
   MPI_Init(&argc,&argv);
   int worldSize = 0;
   MPI_Comm_size(MPI_COMM_WORLD,&worldSize);
+  const double perSize = 1.0/double(worldSize);
   int rank = MPI_PROC_NULL;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
@@ -78,27 +79,26 @@ int main(int argc, char **argv)
   }
 
   int strided = false;
-  int countLo = 1;
-  int countHi = 32*1024;
   int iters = 3;
+  long countAll = INT_MAX;
+  int countLo = 1;
   if (rank == 0) {
     if (argc > 1) strided = ('s' == tolower(*argv[1]));
-    int i = 0;
-    if (argc > 2) sscanf(argv[2],"%d",&i);
+    long i = 0;
+    if (argc > 2) sscanf(argv[2],"%ld",&i);
     if (i > 0) iters = i;
     i = 0;
-    if (argc > 3) sscanf(argv[3],"%d",&i);
-    if (i > 0) countLo = i;
+    if (argc > 3) sscanf(argv[3],"%ld",&i);
+    if (i > 0) countAll = i;
+    countAll = (countAll/worldSize)*worldSize;
     i = 0;
-    if (argc > 4) sscanf(argv[4],"%d",&i);
-    if (i > 0) countHi = i;
+    if (argc > 4) sscanf(argv[4],"%ld",&i);
+    if (i > 0) countLo = i;
   }
   MPI_Bcast(&strided,1,MPI_INT,0,MPI_COMM_WORLD);
   MPI_Bcast(&iters,1,MPI_INT,0,MPI_COMM_WORLD);
-  MPI_Bcast(&countLo,1,MPI_INT,0,MPI_COMM_WORLD);
-  MPI_Bcast(&countHi,1,MPI_INT,0,MPI_COMM_WORLD);
+  MPI_Bcast(&countAll,1,MPI_LONG,0,MPI_COMM_WORLD);
 
-  const long countAll = long(worldSize)*long(countHi);
   const size_t bytes = countAll*sizeof(long);
 
   long *recvD = nullptr;
@@ -147,9 +147,9 @@ int main(int argc, char **argv)
       const long myOffset = long(count)*long(id);
       const int grid = std::min(long(gridMax),(activeAll-1)/long(block)+1);
 
+      double timeMax = 0;
       double timeMin = 60.0*60.0*24.0*365.0;
       double timeSum = 0;
-      double timeMax = 0;
 
       for (int i = 0; i <= iters; i++) {
 
@@ -160,23 +160,25 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
         verify<<<grid,block>>>(strided,myOffset,countAll,actualSize,count,team,taskStride,recvD);
         const double myTime = after-before;
-        double time = 0;
-        MPI_Reduce(&myTime,&time,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
+        double thisTimeMax, thisTimeMin, thisTimeSum;
+        MPI_Reduce(&myTime,&thisTimeMax,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+        MPI_Reduce(&myTime,&thisTimeMin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
+        MPI_Reduce(&myTime,&thisTimeSum,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
         if (rank == 0) {
           if (i == 0) {
-            printf("### 0 time %g (warmup, ignored)\n",time);
+            printf("### 0 time min %g avg %g max %g (warmup, ignored)\n",thisTimeMin,thisTimeSum*perSize,thisTimeMax);
           } else {
-            timeMin = std::min(timeMin,time);
-            timeSum += time;
-            timeMax = std::max(timeMax,time);
-            printf("### %d time %g\n",i,time);
+            timeMax = std::max(timeMax,thisTimeMax);
+            timeMin = std::min(timeMin,thisTimeMin);
+            timeSum += thisTimeSum;
+            printf("### %d time min %g avg %g max %g\n",i,thisTimeMin,thisTimeSum*perSize,thisTimeMax);
           }
           fflush(stdout);
         }
         CHECK(hipDeviceSynchronize());
       }
       if (rank == 0) {
-        const double timeAvg = timeSum/double(iters);
+        const double timeAvg = timeSum*perSize/double(iters);
         printf("%d %d %d %g %g %g %g %g %g %g\n",stride,targetSize,count,gib,timeMin,timeAvg,timeMax,gib/timeMax,gib/timeAvg,gib/timeMin);
         fflush(stdout);
       }

@@ -1,17 +1,15 @@
 #!/bin/bash
-#SBATCH -J always -t 55:00 --exclusive
+#SBATCH -J always --exclusive
 source ./env
 module -t list
 set -x
 export OMP_NUM_THREADS=7
 export MPICH_GPU_SUPPORT_ENABLED=1
 export MPICH_VERSION_DISPLAY=1
+export MPICH_OFI_CXI_COUNTER_REPORT=2
 ulimit -c 0
 NODES=${SLURM_JOB_NUM_NODES}
 TASKS=$(( NODES * 8 ))
-
-ldd ../../fishfry/fishfry
-
 
 ldd ./all
 
