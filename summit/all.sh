@@ -9,12 +9,14 @@ ulimit -c 0
 
 ldd ./all
 
+COUNTMAX=402653184
+
 date
-jsrun -a1 -c7 -g1 -r6 -brs --smpiargs="-gpu" ./all contig 5 805306368
+jsrun -a1 -c7 -g1 -r6 -brs --smpiargs="-gpu" ./all contig 5 ${COUNTMAX}
 date
 
 sleep 5
 
 date
-jsrun -a1 -c7 -g1 -r6 -brs --smpiargs="-gpu" ./all strided 5 805306368
+jsrun -a1 -c7 -g1 -r6 -brs --smpiargs="-gpu" ./all strided 5 ${COUNTMAX}
 date
