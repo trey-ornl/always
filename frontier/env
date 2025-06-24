@@ -1,4 +1,4 @@
-module load cpe/24.11
+module load cpe/25.03
 module load rocm
 module unload darshan-runtime
 module load craype-accel-amd-gfx90a

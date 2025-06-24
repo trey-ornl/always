@@ -5,10 +5,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <hip/hip_runtime.h>
+#include <hsa/hsa_ext_amd.h>
 
-#include "Aller.h"
-
-static void checkHip(const hipError_t err, const char *const file, const int line)
+static void checkAMD(const hipError_t err, const char *const file, const int line)
 {
   if (err == hipSuccess) return;
   fprintf(stderr,"HIP ERROR AT LINE %d OF FILE '%s': %s %s\n",line,file,hipGetErrorName(err),hipGetErrorString(err));
@@ -16,7 +15,41 @@ static void checkHip(const hipError_t err, const char *const file, const int lin
   exit(err);
 }
 
-#define CHECK(X) checkHip(X,__FILE__,__LINE__)
+static void checkAMD(const hsa_status_t err, const char *const file, const int line)
+{
+  if (err == HSA_STATUS_SUCCESS) return;
+  const char *string;
+  hsa_status_string(err,&string);
+  fprintf(stderr,"HSA ERROR AT LINE %d OF FILE '%s': %d %s\n",line,file,err,string);
+  fflush(stderr);
+  exit(err);
+}
+
+#define CHECK(X) checkAMD(X,__FILE__,__LINE__)
+
+#ifdef USE_ALLTOALL
+#include "Aller.MPI_Alltoall.h"
+#endif
+
+#ifdef USE_GET
+#include "Aller.MPI_Get.h"
+#endif
+
+#ifdef USE_HSA
+#include "Aller.hsa.h"
+#endif
+
+#ifdef USE_ISEND
+#include "Aller.MPI_Isend.h"
+#endif
+
+#ifdef USE_PUT
+#include "Aller.MPI_Put.h"
+#endif
+
+#ifdef USE_RSEND
+#include "Aller.MPI_Rsend.h"
+#endif
 
 __global__ void init(const int rank, const long countAll, long *const sendD)
 {
