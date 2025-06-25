@@ -51,31 +51,29 @@ static void checkAMD(const hsa_status_t err, const char *const file, const int l
 #include "Aller.MPI_Rsend.h"
 #endif
 
-__global__ void init(const int rank, const long countAll, long *const sendD)
+__global__ void init(const int rank, const int size, const int count, long *const recvD, long *const sendD)
 {
-  const long offset = countAll*long(rank);
+  const long countAll = long(size)*long(count);
+  const long origin = long(rank)*countAll;
   const long stride = blockDim.x*gridDim.x;
   const long ilo = threadIdx.x+blockIdx.x*blockDim.x;
-  for (long i = ilo; i < countAll; i += stride) sendD[i] = i+offset;
+  for (long i = ilo; i < countAll; i += stride) {
+    recvD[i] = -1;
+    sendD[i] = origin+i;
+  }
 }
 
-__global__ void verify(const bool strided, const long myOffset, const long countAll, const long commSize, const long count, const int team, const int taskStride, long *const recvD)
+__global__ void verify(const int rank, const int size, const long count, long *const recvD, unsigned long *const errorsD)
 {
-  const long iStride = blockDim.x*gridDim.x;
-  const long ilo = threadIdx.x+blockIdx.x*blockDim.x;
-  const long ihi = count*commSize;
-  for (long i = ilo; i < ihi; i += iStride) {
-    const long task = i/count;
-    const long j = i%count;
-    const long worldTask = strided ? long(team+task*taskStride) : long(task+team*taskStride);
-    const long offset = myOffset+worldTask*countAll;
-    const long expected = j+offset;
-    const long k = j+task*long(count);
-    if (expected != recvD[k]) {
-      printf("ERROR: task %ld element %ld expected %ld received %ld\n",task,k,expected,recvD[k]);
-      assert(false);
-    }
-    recvD[k] = 0;
+  const long countAll = long(size)*long(count);
+  const long thatRank = blockIdx.x;
+  const long origin = thatRank*countAll+long(rank)*long(count);
+  const long offset = thatRank*long(count);
+  const long stride = blockDim.x*gridDim.y;
+  const long ilo = threadIdx.x+blockIdx.y*blockDim.x;
+  for (long i = ilo; i < count; i += stride) {
+    const long expected = origin+i;
+    if (recvD[offset+i] != expected) atomicAdd(errorsD,1);
   }
 }
 
@@ -134,6 +132,7 @@ int main(int argc, char **argv)
   MPI_Bcast(&countAll,1,MPI_LONG,0,MPI_COMM_WORLD);
 
   const size_t bytes = countAll*sizeof(long);
+  const long origin = long(rank)*countAll;
 
   long *recvD = nullptr;
   CHECK(hipMalloc(&recvD,bytes));
@@ -144,11 +143,15 @@ int main(int argc, char **argv)
   CHECK(hipMalloc(&sendD,bytes));
   assert(sendD);
 
-  const int block = 256;
-  const int gridMax = 1024*1024;
-  const int grid = std::min(long(gridMax),(countAll-1)/long(block)+1);
-  init<<<grid,block>>>(rank,countAll,sendD);
-  CHECK(hipDeviceSynchronize());
+  long *originsD = nullptr;
+  CHECK(hipMalloc(&originsD,long(worldSize)*sizeof(*originsD)));
+  assert(originsD);
+
+  unsigned long *errorsD = nullptr;
+  CHECK(hipMalloc(&errorsD,sizeof(*errorsD)));
+  assert(errorsD);
+
+  constexpr int block = 256;
 
   for (int targetSize = worldSize; targetSize > 0; targetSize /= 2) {
 
@@ -161,62 +164,82 @@ int main(int argc, char **argv)
     const int stride = (worldSize-1)/targetSize+1;
     const int team = strided ? rank%stride : rank/targetSize;
 
-    Aller aller(team,rank,sendD,recvD,bytes);
-    const int actualSize = aller.size();
-    const int id = aller.rank();
-
-    assert(actualSize <= targetSize);
+    MPI_Comm subComm;
+    MPI_Comm_split(MPI_COMM_WORLD,team,rank,&subComm);
+    int subRank = MPI_PROC_NULL;
+    MPI_Comm_rank(subComm,&subRank);
+    int subSize = 0;
+    MPI_Comm_size(subComm,&subSize);
+    assert(subSize <= targetSize);
     const long countMax = std::min<long>(INT_MAX,countAll/long(targetSize));
-    const long taskStride = strided ? stride : actualSize;
+    MPI_Allgather(&origin,1,MPI_LONG,originsD,1,MPI_LONG,subComm);
 
-    for (int count = countMax; count >= countLo; count /= 2) {
+    {
+      Aller aller(subComm,sendD,recvD,bytes);
 
-      const long activeAll = long(count)*long(actualSize);
-      const size_t activeBytes = activeAll*sizeof(long);
-      assert(activeBytes <= bytes);
-      const double gib = 2.0*double(activeBytes)/double(1024*1024*1024);
-      const long myOffset = long(count)*long(id);
-      const int grid = std::min(long(gridMax),(activeAll-1)/long(block)+1);
+      for (int count = countMax; count >= countLo; count /= 2) {
 
-      double timeMax = 0;
-      double timeMin = 60.0*60.0*24.0*365.0;
-      double timeSum = 0;
+        const size_t activeBytes = long(count)*long(subSize)*sizeof(long);
+        assert(activeBytes <= bytes);
+        const double gib = 2.0*double(activeBytes)/double(1024*1024*1024);
+        const uint32_t gridX = subSize;
+        const uint32_t gridY = std::min(1024,(count-1)/block+1);
 
-      for (int i = 0; i <= iters; i++) {
+        double timeMax = 0;
+        double timeMin = 60.0*60.0*24.0*365.0;
+        double timeSum = 0;
 
-        MPI_Barrier(MPI_COMM_WORLD);
-        const double before = MPI_Wtime();
-        aller.run(count);
-        const double after = MPI_Wtime();
-        MPI_Barrier(MPI_COMM_WORLD);
-        verify<<<grid,block>>>(strided,myOffset,countAll,actualSize,count,team,taskStride,recvD);
-        const double myTime = after-before;
-        double thisTimeMax, thisTimeMin, thisTimeSum;
-        MPI_Reduce(&myTime,&thisTimeMax,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
-        MPI_Reduce(&myTime,&thisTimeMin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
-        MPI_Reduce(&myTime,&thisTimeSum,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
-        if (rank == 0) {
-          if (i == 0) {
-            printf("### 0 time min %g avg %g max %g (warmup, ignored)\n",thisTimeMin,thisTimeSum*perSize,thisTimeMax);
-          } else {
-            timeMax = std::max(timeMax,thisTimeMax);
-            timeMin = std::min(timeMin,thisTimeMin);
-            timeSum += thisTimeSum;
-            printf("### %d time min %g avg %g max %g\n",i,thisTimeMin,thisTimeSum*perSize,thisTimeMax);
+        for (int i = 0; i <= iters; i++) {
+
+          init<<<gridX*gridY,block>>>(subRank,subSize,count,recvD,sendD);
+          CHECK(hipDeviceSynchronize());
+          MPI_Barrier(MPI_COMM_WORLD);
+          const double before = MPI_Wtime();
+          aller.run(count);
+          const double after = MPI_Wtime();
+          MPI_Barrier(MPI_COMM_WORLD);
+          CHECK(hipMemset(errorsD,0,sizeof(*errorsD)));
+          verify<<<dim3{gridX,gridY},block>>>(subRank,subSize,count,recvD,errorsD);
+          CHECK(hipDeviceSynchronize());
+          const unsigned long errors = *errorsD;
+          if (errors > 0) {
+            fprintf(stderr,"ERROR: rank %d subrank %d errors %lu of %ld\n",rank,subRank,errors,long(count)*long(subSize));
+            MPI_Abort(subComm,errors);
           }
+          const double myTime = after-before;
+          double thisTimeMax, thisTimeMin, thisTimeSum;
+          MPI_Reduce(&myTime,&thisTimeMax,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+          MPI_Reduce(&myTime,&thisTimeMin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
+          MPI_Reduce(&myTime,&thisTimeSum,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+          if (rank == 0) {
+            if (i == 0) {
+              printf("### 0 time min %g avg %g max %g (warmup, ignored)\n",thisTimeMin,thisTimeSum*perSize,thisTimeMax);
+            } else {
+              timeMax = std::max(timeMax,thisTimeMax);
+              timeMin = std::min(timeMin,thisTimeMin);
+              timeSum += thisTimeSum;
+              printf("### %d time min %g avg %g max %g\n",i,thisTimeMin,thisTimeSum*perSize,thisTimeMax);
+            }
+            fflush(stdout);
+          }
+        }
+        if (rank == 0) {
+          const double timeAvg = timeSum*perSize/double(iters);
+          printf("%d %d %d %g %g %g %g %g %g %g\n",stride,targetSize,count,gib,timeMin,timeAvg,timeMax,gib/timeMax,gib/timeAvg,gib/timeMin);
           fflush(stdout);
         }
-        CHECK(hipDeviceSynchronize());
       }
-      if (rank == 0) {
-        const double timeAvg = timeSum*perSize/double(iters);
-        printf("%d %d %d %g %g %g %g %g %g %g\n",stride,targetSize,count,gib,timeMin,timeAvg,timeMax,gib/timeMax,gib/timeAvg,gib/timeMin);
-        fflush(stdout);
-      }
+      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Comm_free(&subComm);
     }
   }
   if (rank == 0) { printf("# Done\n"); fflush(stdout); }
 
+  CHECK(hipDeviceSynchronize());
+  CHECK(hipFree(errorsD));
+  errorsD = nullptr;
+  CHECK(hipFree(originsD));
+  originsD = nullptr;
   CHECK(hipFree(sendD));
   sendD = nullptr;
   CHECK(hipFree(recvD));
