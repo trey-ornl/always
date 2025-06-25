@@ -16,14 +16,14 @@ struct Aller {
   std::vector<int> sources_;
   static constexpr int tag_ = 0;
 
-  Aller(const int color, const int key, long *const send, long *const recv, const size_t bytes):
+  Aller(MPI_Comm const comm, long *const send, long *const recv, const size_t bytes):
+    comm_(comm),
     maxCount_(0),
     rank_(MPI_PROC_NULL),
     recv_(recv),
     send_(send),
     size_(0)
   {
-    MPI_Comm_split(MPI_COMM_WORLD,color,key,&comm_);
     MPI_Comm_rank(comm_,&rank_);
     MPI_Comm_size(comm_,&size_);
     maxCount_ = bytes/(size_*sizeof(*recv_));
@@ -38,14 +38,12 @@ struct Aller {
 
   ~Aller()
   {
-    MPI_Comm_free(&comm_);
     size_ = 0;
     recv_ = send_ = nullptr;
     rank_ = MPI_PROC_NULL;
     maxCount_ = 0;
+    comm_ = MPI_COMM_NULL;
   }
-
-  int rank() const { return rank_; }
 
   void run(const int count)
   {
@@ -63,7 +61,5 @@ struct Aller {
     }
     MPI_Waitall(size_,rreqs_.data(),MPI_STATUSES_IGNORE);
   }
-
-  int size() const { return size_; }
 };
 

@@ -32,8 +32,8 @@ struct Aller {
   int targetSize_;
   MPI_Win win_;
 
-  Aller(const int color, const int key, long *const send, long *const recv, const size_t bytes):
-    comm_(MPI_COMM_NULL),
+  Aller(MPI_Comm const comm, long *const send, long *const recv, const size_t bytes):
+    comm_(comm),
     maxCount_(0),
     maxThreads_(0),
     rank_(MPI_PROC_NULL),
@@ -44,7 +44,6 @@ struct Aller {
     sharedSize_(0),
     targetSize_(0)
   {
-    MPI_Comm_split(MPI_COMM_WORLD,color,key,&comm_);
     MPI_Comm_rank(comm_,&rank_);
     int size = 0;
     MPI_Comm_size(comm_,&size);
@@ -114,10 +113,8 @@ struct Aller {
     recv_ = nullptr;
     rank_ = MPI_PROC_NULL;
     maxCount_ = 0;
-    MPI_Comm_free(&comm_);
+    comm_ = MPI_COMM_NULL;
   }
-
-  int rank() const { return rank_; }
 
   void run(const int count)
   {
@@ -135,7 +132,5 @@ struct Aller {
     CHECK(hipStreamSynchronize(stream_));
     MPI_Win_fence(0,win_);
   }
-
-  int size() const { return targetSize_+sharedSize_; }
 };
 
