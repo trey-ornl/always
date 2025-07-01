@@ -1,10 +1,11 @@
 #pragma once
 #include <cassert>
 #include <cstdio>
-#include <hip/hip_runtime.h>
-#include <hsa/hsa_ext_amd.h>
 #include <mpi.h>
+#include <sstream>
 #include <vector>
+
+#include "check.h"
 
 static __global__ void copy(const unsigned count, const int rank, const int *const sharedRanks, const long *const *const sends, long *const recv)
 {
@@ -19,6 +20,7 @@ struct Aller {
 
   static constexpr int block_ = 256;
   MPI_Comm comm_;
+  std::string info_;
   long maxCount_;
   int maxThreads_;
   int rank_;
@@ -92,6 +94,11 @@ struct Aller {
 
     MPI_Win_create(send,bytes,sizeof(*recv_),MPI_INFO_NULL,comm_,&win_);
     MPI_Win_fence(0,win_);
+
+    std::stringstream info;
+    info << __FILE__ << ": MPI_Get off node (" << targetSize_
+      << " ranks), copy kernel on node (" << sharedSize_ << " ranks)";
+    info_ = info.str();
   }
 
   ~Aller()
@@ -114,6 +121,11 @@ struct Aller {
     rank_ = MPI_PROC_NULL;
     maxCount_ = 0;
     comm_ = MPI_COMM_NULL;
+  }
+
+  const char *info() const
+  {
+    return info_.c_str();
   }
 
   void run(const int count)

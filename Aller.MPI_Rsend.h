@@ -45,6 +45,11 @@ struct Aller {
     comm_ = MPI_COMM_NULL;
   }
 
+  const char *info() const
+  {
+    return __FILE__ ": MPI_Irecv (rank-1::-1), MPI_Barrier, MPI_Rsend (rank+1:)";
+  }
+
   void run(const int count)
   {
     assert(count <= maxCount_);

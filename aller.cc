@@ -2,30 +2,12 @@
 #include <cassert>
 #include <cctype>
 #include <climits>
-#include <cstdio>
-#include <cstdlib>
-#include <hip/hip_runtime.h>
-#include <hsa/hsa_ext_amd.h>
 
-static void checkAMD(const hipError_t err, const char *const file, const int line)
-{
-  if (err == hipSuccess) return;
-  fprintf(stderr,"HIP ERROR AT LINE %d OF FILE '%s': %s %s\n",line,file,hipGetErrorName(err),hipGetErrorString(err));
-  fflush(stderr);
-  exit(err);
-}
+#include "check.h"
 
-static void checkAMD(const hsa_status_t err, const char *const file, const int line)
-{
-  if (err == HSA_STATUS_SUCCESS) return;
-  const char *string;
-  hsa_status_string(err,&string);
-  fprintf(stderr,"HSA ERROR AT LINE %d OF FILE '%s': %d %s\n",line,file,err,string);
-  fflush(stderr);
-  exit(err);
-}
-
-#define CHECK(X) checkAMD(X,__FILE__,__LINE__)
+#ifdef USE_2D
+#include "Aller.2D.h"
+#endif
 
 #ifdef USE_ALLTOALL
 #include "Aller.MPI_Alltoall.h"
@@ -74,6 +56,13 @@ __global__ void verify(const int rank, const int size, const long count, long *c
   for (long i = ilo; i < count; i += stride) {
     const long expected = origin+i;
     if (recvD[offset+i] != expected) atomicAdd(errorsD,1);
+#if 0
+    if (recvD[offset+i] != expected) {
+      printf("ERROR: %d recvD[%ld] %ld != %ld\n",rank,offset+i,recvD[offset+i],expected);
+    } else {
+      printf("GOOOD: %d recvD[%ld] %ld == %ld\n",rank,offset+i,recvD[offset+i],expected);
+    }
+#endif
   }
 }
 
@@ -155,12 +144,6 @@ int main(int argc, char **argv)
 
   for (int targetSize = worldSize; targetSize > 0; targetSize /= 2) {
 
-    if (rank == 0) {
-      printf("\n\n# %s Alltoall performance, %d tasks, %d iterations\n", strided ? "Strided" : "Contiguous",worldSize,iters);
-      printf("# comms | comm size | count | GiB (in+out) | seconds (min, avg, max) | GiB/s (min, avg, max)\n");
-      fflush(stdout);
-    }
-
     const int stride = (worldSize-1)/targetSize+1;
     const int team = strided ? rank%stride : rank/targetSize;
 
@@ -176,6 +159,13 @@ int main(int argc, char **argv)
 
     {
       Aller aller(subComm,sendD,recvD,bytes);
+
+      if (rank == 0) {
+        printf("\n\n# %s\n",aller.info());
+        printf("# %s Alltoall performance, %d tasks, %d iterations\n", strided ? "Strided" : "Contiguous",worldSize,iters);
+        printf("# comms | comm size | count | GiB (in+out) | seconds (min, avg, max) | GiB/s (min, avg, max)\n");
+        fflush(stdout);
+      }
 
       for (int count = countMax; count >= countLo; count /= 2) {
 
@@ -202,6 +192,7 @@ int main(int argc, char **argv)
           verify<<<dim3{gridX,gridY},block>>>(subRank,subSize,count,recvD,errorsD);
           CHECK(hipDeviceSynchronize());
           const unsigned long errors = *errorsD;
+          MPI_Barrier(MPI_COMM_WORLD);
           if (errors > 0) {
             fprintf(stderr,"ERROR: rank %d subrank %d errors %lu of %ld\n",rank,subRank,errors,long(count)*long(subSize));
             MPI_Abort(subComm,errors);
