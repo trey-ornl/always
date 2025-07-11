@@ -33,12 +33,12 @@ static __global__ void gatherFrom(const size_t count, const size_t sharedRank, c
   for (size_t i = threadIdx.x; i < count; i += blockDim.x) p[i] = q[i];
 }
 
-static __global__ void gatherTo(const size_t count, const int *const toRanks, const long *const *const sends, long *const recv)
+static __global__ void gatherTo(const size_t count, const int sharedRank, const int *const ranksByNode, const long *const *const sends, long *const recv)
 {
   const unsigned sendIndex = blockIdx.x;
   const unsigned toIndex = blockIdx.y;
   const unsigned nodeIndex = blockIdx.z;
-  const size_t toRank = toRanks[toIndex+gridDim.y*nodeIndex];
+  const size_t toRank = ranksByNode[toIndex+gridDim.y*(sharedRank+nodeIndex*gridDim.x)];
 
   const long *const q = sends[sendIndex]+count*toRank;
   long *const __restrict__ p = recv+count*(sendIndex+gridDim.x*(toIndex+gridDim.y*nodeIndex));
@@ -50,7 +50,6 @@ struct Aller {
 
   static constexpr unsigned blockMax_ = 1024;
   MPI_Comm comm_;
-  int *gatherRanks_;
   dim3 grid_;
   std::string info_;
   long maxCount_;
@@ -72,7 +71,6 @@ struct Aller {
 
   Aller(MPI_Comm const comm, long *const send, long *const recv, const size_t bytes):
     comm_(comm),
-    gatherRanks_(nullptr),
     grid_(0),
     maxCount_(0),
     myNodeIndex_(0),
@@ -186,23 +184,6 @@ struct Aller {
       CHECK(hipMemcpyHtoD(sends_,sends.data(),sendsBytes));
     }
 
-    {
-      std::vector<int> gatherRanks;
-      const size_t gatherRanksSize = sharedSize_*nGets_;
-      gatherRanks.reserve(gatherRanksSize);
-      for (int i = 0; i < nGets_; i++) {
-        const int node = sharedRank_+i*sharedSize_;
-        const int nodeOffset = node*sharedSize_;
-        for (int j = 0; j < sharedSize_; j++) {
-          gatherRanks.push_back(ranksByNode.at(nodeOffset+j));
-        }
-      }
-      assert(gatherRanks.size() == gatherRanksSize);
-      const size_t gatherRanksBytes = gatherRanksSize*sizeof(*gatherRanks_);
-      CHECK(hipMalloc(&gatherRanks_,gatherRanksBytes));
-      CHECK(hipMemcpyHtoD(gatherRanks_,gatherRanks.data(),gatherRanksBytes));
-    }
-
     const size_t ranksByNodeBytes = ranksByNode.size()*sizeof(*ranksByNode_);
     CHECK(hipMalloc(&ranksByNode_,ranksByNodeBytes));
     CHECK(hipMemcpyHtoD(ranksByNode_,ranksByNode.data(),ranksByNodeBytes));
@@ -294,8 +275,6 @@ struct Aller {
     sends_ = nullptr;
     CHECK(hipFree(ranksByNode_));
     ranksByNode_ = nullptr;
-    CHECK(hipFree(gatherRanks_));
-    gatherRanks_ = nullptr;
 
     sharedSize_ = 0;
     sharedRank_ = MPI_PROC_NULL;
@@ -344,7 +323,7 @@ struct Aller {
     MPI_Barrier(sharedComm_);
 
     const unsigned block = std::min<unsigned>(blockMax_,count);
-    gatherTo<<<grid_,block,0,stream_>>>(count,gatherRanks_,sends_,recv_);
+    gatherTo<<<grid_,block,0,stream_>>>(count,sharedRank_,ranksByNode_,sends_,recv_);
 
     assert(long(count)*long(sharedSize_*sharedSize_) <= long(UINT_MAX));
     const size_t targetCount = count*sharedSize_*sharedSize_;
