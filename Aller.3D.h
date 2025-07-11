@@ -275,17 +275,10 @@ struct Aller {
   ~Aller()
   {
     if (punt_) {
-      MPI_Barrier(comm_);
       maxCount_ = 0;
       comm_ = MPI_COMM_NULL;
       return;
     }
-
-    CHECK(hipStreamSynchronize(stream_));
-    CHECK(hipDeviceSynchronize());
-    MPI_Barrier(sharedComm_);
-    MPI_Win_fence(0,win_);
-    MPI_Barrier(comm_);
 
     MPI_Win_free(&win_);
     CHECK(hipStreamDestroy(stream_));
@@ -322,7 +315,7 @@ struct Aller {
 
   void run(const int count)
   {
-    {
+    if (false) {
       int size = 0;
       MPI_Comm_size(comm_,&size);
       for (int i = 0; i < size; i++) {
@@ -360,7 +353,7 @@ struct Aller {
     CHECK(hipStreamSynchronize(stream_));
     MPI_Win_fence(0,win_);
 
-    {
+    if (false) {
       int size = 0;
       MPI_Comm_size(comm_,&size);
       for (int i = 0; i < size; i++) {
@@ -392,7 +385,7 @@ struct Aller {
     CHECK(hipStreamSynchronize(stream_));
     MPI_Win_fence(0,win_);
 
-    {
+    if (false) {
       int size = 0;
       MPI_Comm_size(comm_,&size);
       for (int i = 0; i < size; i++) {
@@ -422,7 +415,7 @@ struct Aller {
     gatherFrom<<<grid_,block,0,stream_>>>(count,sharedRank_,ranksByNode_,sends_,recv_);
     CHECK(hipStreamSynchronize(stream_));
     MPI_Barrier(sharedComm_);
-    {
+    if (false) {
       int size = 0;
       MPI_Comm_size(comm_,&size);
       for (int i = 0; i < size; i++) {
