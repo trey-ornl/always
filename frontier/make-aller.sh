@@ -4,13 +4,18 @@ module -t list
 set -x
 cd ..
 
-rm -f frontier/aller-2d
-hipcc -Wall -Werror -Wno-unused-function -g -DUSE_2D -O -I${CRAY_MPICH_DIR}/include -o frontier/aller-2d aller.cc -L${CRAY_MPICH_DIR}/lib ${PE_MPICH_GTL_DIR_amd_gfx90a} -lmpi ${PE_MPICH_GTL_LIBS_amd_gfx90a} || exit
+rm -f frontier/aller-3d
+hipcc -Wall -Wno-unused-function -g -DUSE_3D -DUSE_SHUFFLE -O -I${CRAY_MPICH_DIR}/include -o frontier/aller-3d aller.cc -L${CRAY_MPICH_DIR}/lib ${PE_MPICH_GTL_DIR_amd_gfx90a} -lmpi ${PE_MPICH_GTL_LIBS_amd_gfx90a} -lhsa-runtime64 || exit
 
-#exit
+exit
 
 rm -f frontier/aller-alltoall
 hipcc -Wall -Werror -Wno-unused-function -g -DUSE_ALLTOALL -O -I${CRAY_MPICH_DIR}/include -o frontier/aller-alltoall aller.cc -L${CRAY_MPICH_DIR}/lib ${PE_MPICH_GTL_DIR_amd_gfx90a} -lmpi ${PE_MPICH_GTL_LIBS_amd_gfx90a} || exit
+
+exit
+
+rm -f frontier/aller-2d
+hipcc -Wall -Werror -Wno-unused-function -g -DUSE_2D -O -I${CRAY_MPICH_DIR}/include -o frontier/aller-2d aller.cc -L${CRAY_MPICH_DIR}/lib ${PE_MPICH_GTL_DIR_amd_gfx90a} -lmpi ${PE_MPICH_GTL_LIBS_amd_gfx90a} || exit
 
 #exit
 

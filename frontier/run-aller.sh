@@ -12,9 +12,12 @@ shift
 TASKS=$(( NODES * 8 ))
 #TASKS=$(( NODES * 4 ))
 TIME='5:00'
+ldd ./aller-3d
+MPICH_GPU_IPC_ENABLED=0 srun -t ${TIME} -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./aller-3d $@
+exit
 ldd ./aller-alltoall
 srun -t ${TIME} -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./aller-alltoall $@
-#exit
+exit
 ldd ./aller-get
 srun -t ${TIME} -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./aller-get $@
 #exit

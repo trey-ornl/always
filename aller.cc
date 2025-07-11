@@ -9,6 +9,10 @@
 #include "Aller.2D.h"
 #endif
 
+#ifdef USE_3D
+#include "Aller.3D.h"
+#endif
+
 #ifdef USE_ALLTOALL
 #include "Aller.MPI_Alltoall.h"
 #endif
@@ -101,7 +105,7 @@ int main(int argc, char **argv)
 
   int strided = false;
   int iters = 3;
-  long countAll = 2L*1024L*1024L*1024L;
+  long countAll = 1024L*1024L*1024L;
   int countLo = 1;
   if (rank == 0) {
     if (argc > 1) strided = ('s' == tolower(*argv[1]));
@@ -219,10 +223,12 @@ int main(int argc, char **argv)
           printf("%d %d %d %g %g %g %g %g %g %g\n",stride,targetSize,count,gib,timeMin,timeAvg,timeMax,gib/timeMax,gib/timeAvg,gib/timeMin);
           fflush(stdout);
         }
+        break;
       }
       MPI_Barrier(MPI_COMM_WORLD);
       MPI_Comm_free(&subComm);
     }
+    break;
   }
   if (rank == 0) { printf("# Done\n"); fflush(stdout); }
 
