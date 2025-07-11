@@ -192,39 +192,44 @@ struct Aller {
       std::vector<int> nodes;
       nodes.reserve(nGets_);
 
-#if !defined(USE_FARTHEST) && !defined(USE_ROTATE) && !defined(USE_SHUFFLE)
-#define USE_ROTATE 3
-#endif
+      if (getenv("ALLER_USE_FARTHEST")) {
 
-#ifdef USE_FARTHEST
-      const int origin = sharedRank_+myNodeIndex_*sharedSize_;
-      for (int i = 0; i < nGets_; i++) {
-        const int step = (i%2) ? (i+1)/2 : -i/2;
-        const int node = (origin+step*sharedSize_+nNodes)%nNodes;
-        nodes.push_back(node);
-      }
-      std::reverse(nodes.begin(),nodes.end());
-      info << ", " << nGets_ << " target nodes farthest to closest";
-#endif
+        const int origin = sharedRank_+myNodeIndex_*sharedSize_;
+        for (int i = 0; i < nGets_; i++) {
+          const int step = (i%2) ? (i+1)/2 : -i/2;
+          const int node = (origin+step*sharedSize_+nNodes)%nNodes;
+          nodes.push_back(node);
+        }
+        std::reverse(nodes.begin(),nodes.end());
+        info << ", " << nGets_ << " target nodes farthest to closest (ALLER_USE_FARTHEST)";
 
-#ifdef USE_ROTATE
-      const int rotation = nGets_/USE_ROTATE+1;
-      for (int i = 0; i < nGets_; i++) {
-        const int node = (sharedRank_+(i+rotation)*sharedSize_)%nNodes;
-        nodes.push_back(node);
-      }
-      info << ", rotate " << nGets_ << " target nodes by " << rotation;
-#endif
+      } else if (getenv("ALLER_USE_SHUFFLE")) {
 
-#ifdef USE_SHUFFLE
-      for (int i = 0; i < nGets_; i++) {
-        const int node = sharedRank_+i*sharedSize_;
-        assert(node < nNodes);
-        nodes.push_back(node);
+        for (int i = 0; i < nGets_; i++) {
+          const int node = sharedRank_+i*sharedSize_;
+          assert(node < nNodes);
+          nodes.push_back(node);
+        }
+        std::shuffle(nodes.begin(),nodes.end(),std::random_device());
+        info << ", randomly shuffle " << nGets_ << " target nodes (ALLER_USE_SHUFFLE)";
+
+      } else {
+
+        int useRotate = 3;
+        const char *const useRotateStr = getenv("ALLER_USE_ROTATE");
+        if (useRotateStr) {
+          int value = 0;
+          if ((sscanf(useRotateStr,"%d",&value) == 1) && (value > 0)) useRotate = value;
+        }
+
+        const int rotation = nGets_/useRotate+1;
+        for (int i = 0; i < nGets_; i++) {
+          const int node = (sharedRank_+(i+rotation)*sharedSize_)%nNodes;
+          nodes.push_back(node);
+        }
+        info << ", rotate " << nGets_ << " target nodes by " << rotation << " (ALLER_USE_ROTATE=" << useRotate << ")";
+
       }
-      std::shuffle(nodes.begin(),nodes.end(),std::random_device());
-      info << ", randomly shuffle " << nGets_ << " target nodes";
-#endif
 
       info_ = info.str();
 

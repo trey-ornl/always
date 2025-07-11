@@ -5,7 +5,7 @@ set -x
 cd ..
 
 rm -f frontier/aller-3d
-hipcc -Wall -Wno-unused-function -g -DUSE_3D -DUSE_SHUFFLE -O -I${CRAY_MPICH_DIR}/include -o frontier/aller-3d aller.cc -L${CRAY_MPICH_DIR}/lib ${PE_MPICH_GTL_DIR_amd_gfx90a} -lmpi ${PE_MPICH_GTL_LIBS_amd_gfx90a} -lhsa-runtime64 || exit
+hipcc -Wall -Wno-unused-function -g -DUSE_3D -O -I${CRAY_MPICH_DIR}/include -o frontier/aller-3d aller.cc -L${CRAY_MPICH_DIR}/lib ${PE_MPICH_GTL_DIR_amd_gfx90a} -lmpi ${PE_MPICH_GTL_LIBS_amd_gfx90a} -lhsa-runtime64 || exit
 
 exit
 
