@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 
   int strided = false;
   int iters = 3;
-  long countAll = 1024L*1024L*1024L;
+  long countAll = 128L*1024L*1024L;
   int countLo = 1;
   if (rank == 0) {
     if (argc > 1) strided = ('s' == tolower(*argv[1]));

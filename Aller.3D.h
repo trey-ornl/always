@@ -210,7 +210,7 @@ struct Aller {
           assert(node < nNodes);
           nodes.push_back(node);
         }
-        std::shuffle(nodes.begin(),nodes.end(),std::random_device());
+        std::shuffle(nodes.begin(),nodes.end(),std::default_random_engine(rank_+1));
         info << ", randomly shuffle " << nGets_ << " target nodes (ALLER_USE_SHUFFLE)";
 
       } else {

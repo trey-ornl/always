@@ -90,39 +90,6 @@ struct Aller {
 
   void run(const int count)
   {
-#if 0
-    int rank = MPI_PROC_NULL;
-    MPI_Comm_rank(comm_,&rank);
-    int size = 0;
-    MPI_Comm_size(comm_,&size);
-    for (int i = 0; i < size; i++) {
-      MPI_Barrier(comm_);
-      if (rank == i) {
-        printf("%d before |",rank);
-        for (int j = 0; j < size; j++) {
-          for (int k = 0; k < count; k++) printf(" %ld",send_[j*count+k]);
-          printf(" |");
-        }
-        printf("\n");
-        fflush(stdout);
-      }
-    }
-    MPI_Alltoall(send_,count,MPI_LONG,recv_,count,MPI_LONG,comm_);
-    for (int i = 0; i < size; i++) {
-      MPI_Barrier(comm_);
-      if (rank == i) {
-        printf("%d expect |",rank);
-        for (int j = 0; j < size; j++) {
-          for (int k = 0; k < count; k++) printf(" %ld",recv_[j*count+k]);
-          printf(" |");
-        }
-        printf("\n");
-        fflush(stdout);
-      }
-      MPI_Barrier(comm_);
-    }
-#endif
-
     if ((sizeX_ == 1) || (sizeY_ == 1)) {
       MPI_Alltoall(send_,count,MPI_LONG,recv_,count,MPI_LONG,comm_);
       return;
@@ -133,22 +100,6 @@ struct Aller {
     const int countY = count*sizeX_;
     MPI_Alltoall(send_,countY,MPI_LONG,recv_,countY,MPI_LONG,commY_);
 
-#if 0
-    for (int i = 0; i < size; i++) {
-      MPI_Barrier(comm_);
-      if (rank == i) {
-        printf("%d pretra |",rank);
-        for (int j = 0; j < size; j++) {
-          for (int k = 0; k < count; k++) printf(" %ld",recv_[j*count+k]);
-          printf(" |");
-        }
-        printf("\n");
-        fflush(stdout);
-      }
-      MPI_Barrier(comm_);
-    }
-#endif
-
     constexpr int block = 256;
     const dim3 gridY((count-1)/block+1,sizeX_,sizeY_);
     transpose<<<gridY,block,0,stream_>>>(count,sizeX_,sizeY_,recv_,send_);
@@ -158,46 +109,11 @@ struct Aller {
     const long bytes = long(count)*long(sizeX_)*long(sizeY_)*sizeof(*recv_);
     CHECK(hipStreamSynchronize(stream_));
 
-#if 0
-    for (int i = 0; i < size; i++) {
-      MPI_Barrier(comm_);
-      if (rank == i) {
-        printf("%d postra |",rank);
-        for (int j = 0; j < size; j++) {
-          for (int k = 0; k < count; k++) printf(" %ld",send_[j*count+k]);
-          printf(" |");
-        }
-        printf("\n");
-        fflush(stdout);
-      }
-      MPI_Barrier(comm_);
-    }
-#endif
-
     MPI_Alltoall(send_,countX,MPI_LONG,recv_,countX,MPI_LONG,commX_);
+
     transpose<<<gridX,block,0,stream_>>>(count,sizeY_,sizeX_,recv_,send_);
     CHECK(hipMemcpyDtoDAsync(recv_,send_,bytes,stream_));
     CHECK(hipStreamSynchronize(stream_));
-
-#if 0
-    for (int i = 0; i < size; i++) {
-      MPI_Barrier(comm_);
-      if (rank == i) {
-        printf("%d after  |",rank);
-        for (int j = 0; j < size; j++) {
-          for (int k = 0; k < count; k++) printf(" %ld",recv_[j*count+k]);
-          printf(" |");
-        }
-        printf("\n");
-        fflush(stdout);
-      }
-      MPI_Barrier(comm_);
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Finalize();
-    exit(0);
-#endif
-
   }
 };
 
