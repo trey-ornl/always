@@ -12,46 +12,11 @@ NODES=${SLURM_JOB_NUM_NODES}
 TASKS=$(( NODES * 8 ))
 ldd aller-*
 
-EXE=aller-get
-echo "## ${EXE}"
-srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_FARTHEST=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_STRIDE=0 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=32 ALLER_USE_STRIDE=0 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=8 ALLER_USE_STRIDE=0 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=256 ALLER_USE_STRIDE=0 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=1024 ALLER_USE_STRIDE=0 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-exit
-
-EXE=aller-alltoall
-echo "## ${EXE}"
-srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-
-EXE=aller-2d
-echo "## ${EXE}"
-srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-
-EXE=aller-get
-echo "## ${EXE}"
-srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_FARTHEST=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=32 ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=128 ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-
-EXE=aller-hsa
-echo "## ${EXE}"
-srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_FARTHEST=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=32 ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=128 ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-
-EXE=aller-3d
-echo "## ${EXE}"
-srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_FARTHEST=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=32 ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
-MPICH_RMA_MAX_PENDING=128 ALLER_USE_SHUFFLE=1 srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ${EXE} ; sleep 5
+export ALLER_USE_STRIDE=0
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered aller-2d ; sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered aller-node2d ; sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered aller-get2d ; sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered aller-3d ; sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered aller-alltoall ; sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered aller-get ; sleep 5
+srun -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered aller-hsa ; sleep 5

@@ -31,7 +31,7 @@ struct Aller {
   long *send_;
   int sizeX_, sizeY_;
   hipStream_t stream_;
-  MPI_Win win_;
+  MPI_Win winX_, winY_;
 
   Aller(MPI_Comm const comm, long *const send, long *const recv, const size_t bytes):
     comm_(comm),
@@ -41,7 +41,7 @@ struct Aller {
     recv_(recv),
     send_(send),
     sizeX_(0), sizeY_(0),
-    win_(MPI_WIN_NULL)
+    winX_(MPI_WIN_NULL), winY_(MPI_WIN_NULL)
   {
     int size = 0;
     MPI_Comm_size(comm,&size);
@@ -69,7 +69,7 @@ struct Aller {
     offsetsX_.reserve(sizeX_);
     for (int i = 0; i < strideX; i++) {
       for (int j = i; j < sizeX_; j += strideX) {
-        ranksX_.push_back(ranksX.at(j));
+        ranksX_.push_back(j); //ranksX.at(j));
         offsetsX_.push_back(j);
       }
     }
@@ -89,7 +89,7 @@ struct Aller {
     offsetsY_.reserve(sizeY_);
     for (int i = 0; i < strideY; i++) {
       for (int j = i; j < sizeY_; j += strideY) {
-        ranksY_.push_back(ranksY.at(j));
+        ranksY_.push_back(j); //ranksY.at(j));
         offsetsY_.push_back(j);
       }
     }
@@ -100,8 +100,11 @@ struct Aller {
     CHECK(hipStreamCreateWithFlags(&stream_,hipStreamNonBlocking));
     CHECK(hipStreamSynchronize(stream_));
 
-    MPI_Win_create(send_,bytes,sizeof(*recv_),MPI_INFO_NULL,comm_,&win_);
-    MPI_Win_fence(0,win_);
+    MPI_Win_create(send_,bytes,sizeof(*recv_),MPI_INFO_NULL,commX_,&winX_);
+    MPI_Win_fence(0,winX_);
+
+    MPI_Win_create(send_,bytes,sizeof(*recv_),MPI_INFO_NULL,commY_,&winY_);
+    MPI_Win_fence(0,winY_);
 
     std::stringstream info;
     info << __FILE__ << ": " << sizeX_ << " x " << sizeY_ << " ranks";
@@ -111,7 +114,8 @@ struct Aller {
 
   ~Aller()
   {
-    MPI_Win_free(&win_);
+    MPI_Win_free(&winY_);
+    MPI_Win_free(&winX_);
     CHECK(hipStreamSynchronize(stream_));
     CHECK(hipStreamDestroy(stream_));
     MPI_Comm_free(&commY_);
@@ -134,23 +138,22 @@ struct Aller {
       return;
     }
 
+    MPI_Win_fence(0,winY_);
     assert(count <= maxCount_);
     assert(long(count)*long(sizeX_) <= long(INT_MAX));
     const size_t countY = count*sizeX_;
     const size_t bytesY = countY*sizeof(long);
     const MPI_Aint dispY = rankY_*countY;
-    //MPI_Alltoall(send_,countY,MPI_LONG,recv_,countY,MPI_LONG,commY_);
     for (int i = 0; i < sizeY_; i++) {
       long *const originAddr = recv_+offsetsY_[i]*countY;
-      if (ranksY_[i] == rank_) {
+      if (ranksY_[i] == rankY_) {
         long *const src = send_+rankY_*countY;
         CHECK(hipMemcpyDtoDAsync(originAddr,src,bytesY,stream_));
       } else {
-        MPI_Get(originAddr,countY,MPI_LONG,ranksY_[i],dispY,countY,MPI_LONG,win_);
+        MPI_Get(originAddr,countY,MPI_LONG,ranksY_[i],dispY,countY,MPI_LONG,winY_);
       }
     }
-    CHECK(hipStreamSynchronize(stream_));
-    MPI_Win_fence(0,win_);
+    MPI_Win_fence(0,winY_);
 
     constexpr int block = 256;
     const dim3 gridY((count-1)/block+1,sizeX_,sizeY_);
@@ -164,7 +167,7 @@ struct Aller {
     const MPI_Aint dispX = rankX_*countX;
     CHECK(hipStreamSynchronize(stream_));
 
-    MPI_Win_fence(0,win_);
+    MPI_Win_fence(0,winX_);
 
     for (int i = 0; i < sizeX_; i++) {
       long *const originAddr = recv_+offsetsX_[i]*countX;
@@ -172,12 +175,10 @@ struct Aller {
         long *const src = send_+rankX_*countX;
         CHECK(hipMemcpyDtoDAsync(originAddr,src,bytesX,stream_));
       } else {
-        MPI_Get(originAddr,countX,MPI_LONG,ranksX_[i],dispX,countX,MPI_LONG,win_);
+        MPI_Get(originAddr,countX,MPI_LONG,ranksX_[i],dispX,countX,MPI_LONG,winX_);
       }
     }
-    CHECK(hipStreamSynchronize(stream_));
-    MPI_Win_fence(0,win_);
-    //MPI_Alltoall(send_,countX,MPI_LONG,recv_,countX,MPI_LONG,commX_);
+    MPI_Win_fence(0,winX_);
 
     transpose<<<gridX,block,0,stream_>>>(count,sizeY_,sizeX_,recv_,send_);
     CHECK(hipMemcpyDtoDAsync(recv_,send_,bytes,stream_));
