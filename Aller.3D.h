@@ -213,6 +213,22 @@ struct Aller {
         std::shuffle(nodes.begin(),nodes.end(),std::default_random_engine(rank_+1));
         info << ", randomly shuffle " << nGets_ << " target nodes (ALLER_USE_SHUFFLE)";
 
+      } else if (getenv("ALLER_USE_STRIDE")) {
+
+        int stride = int(sqrt(double(nGets_)));
+        const char *const useStrideStr = getenv("ALLER_USE_STRIDE");
+        int value = stride;
+        if ((sscanf(useStrideStr,"%d",&value) == 1) && (value > 0)) stride = value;
+        for (int i = 0; i < stride; i++) {
+          for (int j = i; j < nGets_; j += stride) {
+            const int node = sharedRank_+j*sharedSize_;
+            nodes.push_back(node);
+          }
+        }
+        assert(nodes.size() == nGets_);
+        std::reverse(nodes.begin(),nodes.end());
+        info << ", stride " << stride << " through " << nGets_ << " target nodes (ALLER_USE_STRIDE)";
+
       } else {
 
         int useRotate = 3;
