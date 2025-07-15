@@ -53,6 +53,34 @@ struct Aller {
       std::shuffle(targets_.begin(),targets_.end(),std::default_random_engine(rank_+1));
       info << ", randomly shuffle " << size_ << " targets (ALLER_USE_SHUFFLE)";
 
+    } else if (getenv("ALLER_USE_STRIDE")) {
+
+      int stride = int(sqrt(double(size_)));
+      const char *const useStrideStr = getenv("ALLER_USE_STRIDE");
+      int value = stride;
+      if ((sscanf(useStrideStr,"%d",&value) == 1) && (value > 0)) stride = value;
+      for (int i = 0; i < stride; i++) {
+        for (int j = i; j < size_; j += stride) {
+          const int target = (rank_+j)%size_;
+          targets_.push_back(target);
+        }
+      }
+      std::reverse(targets_.begin(),targets_.end());
+      info << ", stride " << stride << " through " << size_ << " targets (ALLER_USE_STRIDE)";
+#if 0
+      for (int i = 0; i < size_; i++) {
+        MPI_Barrier(comm_);
+        if (rank_ == i) {
+          printf("%d:",rank_);
+          for (const auto target: targets_) printf(" %d",target);
+          printf("\n");
+          fflush(stdout);
+        }
+        MPI_Barrier(comm_);
+      }
+      exit(0);
+#endif
+
     } else {
 
       int useRotate = 3;

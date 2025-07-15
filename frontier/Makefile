@@ -2,7 +2,7 @@ CXX := hipcc
 CXXFLAGS := -Wall -Wno-unused-function -g -O -I$(CRAY_MPICH_DIR)/include
 LDFLAGS := -L$(CRAY_MPICH_DIR)/lib $(PE_MPICH_GTL_DIR_amd_gfx90a) -lmpi $(PE_MPICH_GTL_LIBS_amd_gfx90a) -lhsa-runtime64
 
-default: aller-alltoall aller-3d aller-2d aller-get aller-hsa
+default: aller-alltoall aller-3d aller-2d aller-get aller-hsa aller-node2d
 
 clean:
 	rm -f aller-alltoall aller-3d aller-2d aller-get aller-hsa
@@ -21,3 +21,6 @@ aller-get: ../aller.cc ../Aller.MPI_Get.h
 
 aller-hsa: ../aller.cc ../Aller.hsa.h
 	$(CXX) $(CXXFLAGS) -DUSE_HSA -o $@ ../aller.cc $(LDFLAGS)
+
+aller-node2d: ../aller.cc ../Aller.node2D.h
+	$(CXX) $(CXXFLAGS) -DUSE_NODE2D -o $@ ../aller.cc $(LDFLAGS)

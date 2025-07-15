@@ -29,6 +29,10 @@
 #include "Aller.MPI_Isend.h"
 #endif
 
+#ifdef USE_NODE2D
+#include "Aller.node2D.h"
+#endif
+
 #ifdef USE_PUT
 #include "Aller.MPI_Put.h"
 #endif
