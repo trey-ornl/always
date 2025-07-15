@@ -21,6 +21,10 @@
 #include "Aller.MPI_Get.h"
 #endif
 
+#ifdef USE_GET2D
+#include "Aller.get2D.h"
+#endif
+
 #ifdef USE_HSA
 #include "Aller.hsa.h"
 #endif

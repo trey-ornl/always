@@ -372,12 +372,12 @@ struct Aller {
         MPI_Barrier(comm_);
       }
     }
+    const size_t targetBytes = sizeof(long)*targetCount;
     for (int i = 0; i < nGets_; i++) {
       long *const originAddr = send_+originOffsets_[i]*targetCount;
       if (targetRanks_[i] == rank_) {
         long *const src = recv_+myNodeIndex_*targetCount;
-        const size_t bytes = sizeof(long)*targetCount;
-        CHECK(hipMemcpyDtoDAsync(originAddr,src,bytes,stream_));
+        CHECK(hipMemcpyDtoDAsync(originAddr,src,targetBytes,stream_));
       } else {
         MPI_Get(originAddr,targetCount,MPI_LONG,targetRanks_[i],targetDisp,targetCount,MPI_LONG,win_);
       }
