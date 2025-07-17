@@ -15,5 +15,5 @@ TIME='5:00'
 for EXE in $(ls aller-*)
 do
 ldd ./${EXE}
-ALLER_USE_STRIDE=0 srun -t ${TIME} -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./${EXE} $@
+ALLER_USE_STRIDE=0 srun -ptesting -t ${TIME} -n${TASKS} -N${NODES} -c${OMP_NUM_THREADS} --gpus-per-task=1 --gpu-bind=closest --exclusive --unbuffered ./${EXE} $@
 done

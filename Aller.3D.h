@@ -191,10 +191,10 @@ struct Aller {
     {
       std::vector<int> nodes;
       nodes.reserve(nGets_);
+      const int origin = sharedRank_+myNodeIndex_*sharedSize_;
 
       if (getenv("ALLER_USE_FARTHEST")) {
 
-        const int origin = sharedRank_+myNodeIndex_*sharedSize_;
         for (int i = 0; i < nGets_; i++) {
           const int step = (i%2) ? (i+1)/2 : -i/2;
           const int node = (origin+step*sharedSize_+nNodes)%nNodes;
@@ -221,7 +221,7 @@ struct Aller {
         if ((sscanf(useStrideStr,"%d",&value) == 1) && (value > 0)) stride = value;
         for (int i = 0; i < stride; i++) {
           for (int j = i; j < nGets_; j += stride) {
-            const int node = sharedRank_+j*sharedSize_;
+            const int node = (origin+j*sharedSize_)%nNodes;
             nodes.push_back(node);
           }
         }
@@ -240,7 +240,7 @@ struct Aller {
 
         const int rotation = nGets_/useRotate+1;
         for (int i = 0; i < nGets_; i++) {
-          const int node = (sharedRank_+(i+rotation)*sharedSize_)%nNodes;
+          const int node = (origin+(i+rotation)*sharedSize_)%nNodes;
           nodes.push_back(node);
         }
         info << ", rotate " << nGets_ << " target nodes by " << rotation << " (ALLER_USE_ROTATE=" << useRotate << ")";

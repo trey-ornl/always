@@ -24,7 +24,6 @@ struct Aller {
   MPI_Comm commX_, commY_;
   std::string info_;
   long maxCount_;
-  std::vector<size_t> offsetsX_, offsetsY_;
   std::vector<int> ranksX_, ranksY_;
   int rank_, rankX_, rankY_;
   long *recv_;
@@ -66,16 +65,14 @@ struct Aller {
     MPI_Allgather(&rank_,1,MPI_INT,ranksX.data(),1,MPI_INT,commX_);
     const int strideX = int(std::sqrt(sizeX_));
     ranksX_.reserve(sizeX_);
-    offsetsX_.reserve(sizeX_);
     for (int i = 0; i < strideX; i++) {
       for (int j = i; j < sizeX_; j += strideX) {
-        ranksX_.push_back(j); //ranksX.at(j));
-        offsetsX_.push_back(j);
+        const int rank = (rankX_+j)%sizeX_;
+        ranksX_.push_back(rank);
       }
     }
     assert(ranksX_.size() == sizeX_);
     std::reverse(ranksX_.begin(),ranksX_.end());
-    std::reverse(offsetsX_.begin(),offsetsX_.end());
 
     MPI_Comm_split(comm,rank_%nx,rank_,&commY_);
     MPI_Comm_rank(commY_,&rankY_);
@@ -86,16 +83,14 @@ struct Aller {
     MPI_Allgather(&rank_,1,MPI_INT,ranksY.data(),1,MPI_INT,commY_);
     const int strideY = int(std::sqrt(sizeY_));
     ranksY_.reserve(sizeY_);
-    offsetsY_.reserve(sizeY_);
     for (int i = 0; i < strideY; i++) {
       for (int j = i; j < sizeY_; j += strideY) {
-        ranksY_.push_back(j); //ranksY.at(j));
-        offsetsY_.push_back(j);
+        const int rank = (rankY_+j)%sizeY_;
+        ranksY_.push_back(rank);
       }
     }
     assert(ranksY_.size() == sizeY_);
     std::reverse(ranksY_.begin(),ranksY_.end());
-    std::reverse(offsetsY_.begin(),offsetsY_.end());
 
     CHECK(hipStreamCreateWithFlags(&stream_,hipStreamNonBlocking));
     CHECK(hipStreamSynchronize(stream_));
@@ -145,7 +140,7 @@ struct Aller {
     const size_t bytesY = countY*sizeof(long);
     const MPI_Aint dispY = rankY_*countY;
     for (int i = 0; i < sizeY_; i++) {
-      long *const originAddr = recv_+offsetsY_[i]*countY;
+      long *const originAddr = recv_+ranksY_[i]*countY;
       if (ranksY_[i] == rankY_) {
         long *const src = send_+rankY_*countY;
         CHECK(hipMemcpyDtoDAsync(originAddr,src,bytesY,stream_));
@@ -170,7 +165,7 @@ struct Aller {
     MPI_Win_fence(0,winX_);
 
     for (int i = 0; i < sizeX_; i++) {
-      long *const originAddr = recv_+offsetsX_[i]*countX;
+      long *const originAddr = recv_+ranksX_[i]*countX;
       if (ranksX_[i] == rank_) {
         long *const src = send_+rankX_*countX;
         CHECK(hipMemcpyDtoDAsync(originAddr,src,bytesX,stream_));
