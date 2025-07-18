@@ -17,6 +17,10 @@
 #include "Aller.MPI_Alltoall.h"
 #endif
 
+#ifdef USE_ALLTOALL_INIT
+#include "Aller.a2ai.h"
+#endif
+
 #ifdef USE_GET
 #include "Aller.MPI_Get.h"
 #endif
@@ -181,6 +185,9 @@ int main(int argc, char **argv)
 
       for (int count = countMax; count >= countLo; count /= 2) {
 
+#ifdef USE_ALLTOALL_INIT
+        aller.init(count);
+#endif
         const size_t activeBytes = long(count)*long(subSize)*sizeof(long);
         assert(activeBytes <= bytes);
         const double gib = 2.0*double(activeBytes)/double(1024*1024*1024);
